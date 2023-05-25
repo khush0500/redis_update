@@ -17,10 +17,6 @@ func processKeys(client *redis.ClusterClient, keys []string, regExp *regexp.Rege
 			fmt.Println("Already done for:", key)
 			continue
 		}
-		if client.Exists(newKey).Val() == 1 {
-			fmt.Println("already converted")
-			continue
-		}
 		value, err := client.HGetAll(key).Result()
 		if err == redis.Nil {
 			fmt.Println("Key", key, "does not exist")
@@ -37,6 +33,7 @@ func processKeys(client *redis.ClusterClient, keys []string, regExp *regexp.Rege
 
 			tx := client.TxPipeline()
 			tx.HMSet(newKey, newValue)
+			tx.Del(key)
 			_, err := tx.Exec()
 			if err == nil {
 				fmt.Println("Hash map added successfully!")
