@@ -1,33 +1,33 @@
 package main
 
 import (
-	"fmt"
+	"log"
 	"regexp"
 	"strings"
-	"sync"
 
 	"github.com/go-redis/redis"
 )
 
-func processKeys(client *redis.ClusterClient, keys []string, regExp *regexp.Regexp, wg *sync.WaitGroup) {
+func processKeys(client *redis.ClusterClient, regExp *regexp.Regexp, iter *redis.ScanIterator) {
 
-	for _, key := range keys {
+	for iter.Next() {
+		key := iter.Val()
 		newKey := strings.Replace(key, "uniquekycuser", "uniquekycuser_rummy", -1)
 		if !regExp.MatchString(key) {
-			fmt.Println("Already done for:", key)
+			log.Println("Already done for:", key)
 			continue
 		}
 		if client.Exists(newKey).Val() == 1 {
-			fmt.Println("already converted")
+			log.Println("already converted")
 			continue
 		}
 		value, err := client.HGetAll(key).Result()
 		if err == redis.Nil {
-			fmt.Println("Key", key, "does not exist")
+			log.Println("Key", key, "does not exist")
 		} else if err != nil {
-			fmt.Println("Failed to retrieve value for key", key, ":", err)
+			log.Println("Failed to retrieve value for key", key, ":", err)
 		} else {
-			fmt.Println("Key:", key, "Value:", value)
+			log.Println("Key:", key, "Value:", value)
 			newValue := map[string]interface{}{}
 			for vkey, velement := range value {
 				valueK := strings.Replace(vkey, "uniquekycuser", "uniquekycuser_rummy", -1)
@@ -39,9 +39,9 @@ func processKeys(client *redis.ClusterClient, keys []string, regExp *regexp.Rege
 			tx.HMSet(newKey, newValue)
 			_, err := tx.Exec()
 			if err == nil {
-				fmt.Println("Hash map added successfully!")
+				log.Println("Hash map added successfully!")
 			} else {
-				fmt.Println("Failed to add hash map:", err)
+				log.Println("Failed to add hash map:", err)
 			}
 
 		}
@@ -55,41 +55,22 @@ func main() {
 
 	pong, err := client.Ping().Result()
 	if err != nil {
-		fmt.Println("Failed to connect to Redis:", err)
+		log.Println("Failed to connect to Redis:", err)
 		return
 	}
-	fmt.Println("Connected to Redis:", pong)
+	log.Println("Connected to Redis:", pong)
 
 	cursor := uint64(0)
-	pattern := "uniquekycuser_*"
+	pattern := "uniquekycuser*"
 	count := int64(1000)
 	regExp := regexp.MustCompile(`^uniquekycuser_\d+$`)
 
-	var wg sync.WaitGroup
+	iter := client.Scan(cursor, pattern, count).Iterator()
 
-	for {
-		keys, scanCursor, err := client.Scan(cursor, pattern, count).Result()
-		if err != nil {
-			fmt.Println("Failed to scan keys:", err)
-			break
-		}
-		wg.Add(1)
-		go func(keys []string, wg *sync.WaitGroup) {
-			defer wg.Done()
-			processKeys(client, keys, regExp, wg)
-		}(keys, &wg)
-
-		cursor = scanCursor
-
-		if cursor == 0 {
-			break
-		}
-	}
-
-	wg.Wait()
+	processKeys(client, regExp, iter)
 
 	err = client.Close()
 	if err != nil {
-		fmt.Println("Failed to close Redis connection:", err)
+		log.Println("Failed to close Redis connection:", err)
 	}
 }
