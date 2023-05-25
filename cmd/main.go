@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"log"
 	"regexp"
 	"strings"
 	"sync"
@@ -14,16 +14,16 @@ func processKeys(client *redis.ClusterClient, keys []string, regExp *regexp.Rege
 	for _, key := range keys {
 		newKey := strings.Replace(key, "uniquekycuser", "uniquekycuser_rummy", -1)
 		if !regExp.MatchString(key) {
-			fmt.Println("Already done for:", key)
+			log.Println("Already done for:", key)
 			continue
 		}
 		value, err := client.HGetAll(key).Result()
 		if err == redis.Nil {
-			fmt.Println("Key", key, "does not exist")
+			log.Println("Key", key, "does not exist")
 		} else if err != nil {
-			fmt.Println("Failed to retrieve value for key", key, ":", err)
+			log.Println("Failed to retrieve value for key", key, ":", err)
 		} else {
-			fmt.Println("Key:", key, "Value:", value)
+			log.Println("Key:", key, "Value:", value)
 			newValue := map[string]interface{}{}
 			for vkey, velement := range value {
 				valueK := strings.Replace(vkey, "uniquekycuser", "uniquekycuser_rummy", -1)
@@ -36,9 +36,9 @@ func processKeys(client *redis.ClusterClient, keys []string, regExp *regexp.Rege
 			tx.Del(key)
 			_, err := tx.Exec()
 			if err == nil {
-				fmt.Println("Hash map added successfully!")
+				log.Println("Hash map added successfully!")
 			} else {
-				fmt.Println("Failed to add hash map:", err)
+				log.Println("Failed to add hash map:", err)
 			}
 
 		}
@@ -52,10 +52,10 @@ func main() {
 
 	pong, err := client.Ping().Result()
 	if err != nil {
-		fmt.Println("Failed to connect to Redis:", err)
+		log.Println("Failed to connect to Redis:", err)
 		return
 	}
-	fmt.Println("Connected to Redis:", pong)
+	log.Println("Connected to Redis:", pong)
 
 	cursor := uint64(0)
 	pattern := "uniquekycuser_*"
@@ -67,7 +67,7 @@ func main() {
 	for {
 		keys, scanCursor, err := client.Scan(cursor, pattern, count).Result()
 		if err != nil {
-			fmt.Println("Failed to scan keys:", err)
+			log.Println("Failed to scan keys:", err)
 			break
 		}
 		wg.Add(1)
@@ -87,6 +87,6 @@ func main() {
 
 	err = client.Close()
 	if err != nil {
-		fmt.Println("Failed to close Redis connection:", err)
+		log.Println("Failed to close Redis connection:", err)
 	}
 }
